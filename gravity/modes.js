@@ -13,6 +13,7 @@ function setMode(mode, { scroll = false, push = true } = {}) {
   if (mode === current && controllers[mode]) return;
   controllers[current]?.leave?.();
   current = mode;
+  $('.gravity-skip').href = mode === 'lab' ? '#sandbox' : `#${mode}`;
   for (const el of $$('[data-mode-panel]')) el.hidden = el.dataset.modePanel !== mode;
   for (const b of $$('[data-mode]')) b.setAttribute('aria-pressed', b.dataset.mode === mode);
   if (push) history.replaceState(null, '', mode === 'lab' ? location.pathname + location.search : `#${mode}`);
