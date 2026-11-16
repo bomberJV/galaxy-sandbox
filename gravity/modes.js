@@ -46,8 +46,12 @@ function wireStageControls(section, stage, { onRestart } = {}) {
   return sync;
 }
 
+function meterWidth(value) {
+  return `${Math.round(Math.min(1, value) * 100)}%`;
+}
+
 function readoutHTML(cells) {
-  return cells.map((c) => `<div class="${c.wide ? 'wide' : ''}"><span>${c.label}</span><output>${c.value}</output>${c.meter !== undefined ? `<div class="meter"><i style="width:${Math.round(Math.min(1, c.meter) * 100)}%"></i></div>` : ''}</div>`).join('');
+  return cells.map((c) => `<div class="${c.wide ? 'wide' : ''}"><span>${c.label}</span><output>${c.value}</output>${c.meter !== undefined ? `<div class="meter"><i style="width:${meterWidth(c.meter)}"></i></div>` : ''}</div>`).join('');
 }
 
 // ---------- 02 / Let it collapse ----------
@@ -61,7 +65,9 @@ const COLLAPSE_NOTES = {
 
 function collapseController() {
   const section = $('#collapse');
+  const grid = $('#collapse-readouts');
   let choice = 'compare', hist = [], lastUi = 0;
+  let stepCost = null, timedSteps = 0, totalStepMs = 0, lastCostUpdate = -Infinity;
   const stage = createNBodyStage({
     canvas: $('#collapse-canvas'), frame: 'first', viewRadius: 6, rate: (info) => info.tRot / 6,
     onReady: () => { $('#collapse-status').textContent = `Running. One turn of the disk takes about six seconds at 1×. The bar usually appears after one and a half to two and a half turns.${small ? ' This device runs fewer stars, so the bar comes out weaker and noisier.' : ''}`; },
@@ -71,9 +77,20 @@ function collapseController() {
       const h = hist[i] || (hist[i] = { values: [], drift: 0, steps: 0 });
       if (msg.stats) {
         if (!h.values.length || rot - h.values.at(-1)[0] >= 0.02) h.values.push([rot, msg.stats.A2 ?? 0]);
-        h.drift = msg.stats.energyDrift ?? 0; h.rot = rot; h.A2 = msg.stats.A2 ?? 0; h.stepMs = msg.stepMs;
+        h.drift = msg.stats.energyDrift ?? 0; h.rot = rot; h.A2 = msg.stats.A2 ?? 0;
       }
       const now = performance.now();
+      // A frame can arrive before a physics step is due. Only completed steps have a timing.
+      if (i === 0 && msg.steps > 0) {
+        timedSteps += msg.steps;
+        totalStepMs += msg.steps * msg.stepMs;
+        if (now - lastCostUpdate >= 1000) {
+          stepCost = totalStepMs / timedSteps;
+          timedSteps = 0;
+          totalStepMs = 0;
+          lastCostUpdate = now;
+        }
+      }
       if (now - lastUi > 250) { lastUi = now; render(); }
     },
   });
@@ -83,28 +100,40 @@ function collapseController() {
     const keys = choice === 'compare' ? ['none', 'heavy'] : [choice];
     const cells = [];
     keys.forEach((k, i) => {
-      const h = hist[i]; if (!h) return;
+      const h = hist[i];
       const tag = keys.length > 1 ? `${COLLAPSE_LABELS[k]} · ` : '';
-      cells.push({ label: `${tag}BAR STRENGTH`, value: (h.A2 ?? 0).toFixed(2), meter: (h.A2 ?? 0) / 0.5 });
-      cells.push({ label: `${tag}TURNS`, value: (h.rot ?? 0).toFixed(1) });
+      cells.push({ label: `${tag}BAR STRENGTH`, value: h?.A2?.toFixed(2) ?? '—', meter: (h?.A2 ?? 0) / 0.5 });
+      cells.push({ label: `${tag}TURNS`, value: h?.rot?.toFixed(1) ?? '—' });
     });
-    const h0 = hist[0];
-    if (h0) cells.push({ label: 'ENERGY DRIFT', value: `${(100 * Math.abs(h0.drift)).toFixed(2)}%`, wide: false });
-    if (h0?.stepMs) cells.push({ label: 'STEP COST', value: `${h0.stepMs.toFixed(0)} ms` });
-    $('#collapse-readouts').innerHTML = readoutHTML(cells);
+    const drift = hist[0]?.drift;
+    cells.push({ label: 'ENERGY DRIFT', value: drift == null ? '—' : `${(100 * Math.abs(drift)).toFixed(2)}%` });
+    cells.push({ label: 'STEP COST', value: stepCost == null ? '—' : `${stepCost.toFixed(0)} ms` });
+    if (grid.children.length !== cells.length) {
+      grid.innerHTML = readoutHTML(cells);
+    } else {
+      cells.forEach(({ value, meter }, index) => {
+        const cell = grid.children[index];
+        const output = cell.querySelector('output');
+        if (output.textContent !== value) output.textContent = value;
+        if (meter !== undefined) cell.querySelector('.meter i').style.width = meterWidth(meter);
+      });
+    }
     sparkline($('#collapse-chart'), keys.map((k, i) => ({ values: hist[i]?.values || [], color: i ? '#e6adbc' : '#daf57c' })),
       { yMax: 0.6, xMax: Math.max(5, ...(hist.map((h) => h?.rot || 0))), xLabel: 'TURNS OF THE DISK', yLabel: 'BAR STRENGTH', marks: [{ y: 0.2, label: 'clear bar', color: '#cda2c0' }] });
   }
 
   function start(c) {
     choice = c; hist = [];
+    stepCost = null;
+    timedSteps = 0;
+    totalStepMs = 0;
+    lastCostUpdate = -Infinity;
     for (const b of $$('[data-collapse]', section)) b.setAttribute('aria-pressed', b.dataset.collapse === c);
     const quality = small ? 'low' : 'medium';
     const keys = c === 'compare' ? ['none', 'heavy'] : [c];
     stage.start(keys.map((k) => ({ kind: 'bar', options: { preset: k, quality } })), keys.map((k) => COLLAPSE_LABELS[k]));
     $('#collapse-note').textContent = COLLAPSE_NOTES[c];
     $('#collapse-status').textContent = 'Building the disk…';
-    $('#collapse-readouts').innerHTML = '';
     render();
   }
   for (const b of $$('[data-collapse]', section)) b.addEventListener('click', () => start(b.dataset.collapse));
