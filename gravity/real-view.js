@@ -1,3 +1,4 @@
+import { observeCanvasSize } from './canvas-size.js';
 import { loadSparc, findGalaxy, vBaryonSq, PROFILES, modelV, chi2, fitHalo, accelerationAt, score, CHALLENGES } from './sparc.js';
 
 const $ = (s, root = document) => root.querySelector(s);
@@ -38,6 +39,9 @@ export async function createRealController(section) {
 
   // ---------- star field ----------
   const canvas = $('#real-canvas'), ctx = canvas.getContext('2d');
+  const noteText = document.createTextNode('');
+  $('#real-note').prepend(noteText);
+  let lastNoteAt = -Infinity;
   let stars = [], time = 0, paused = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let yaw = 0.3, tilt = 1.0, zoom = 1, drag = null, width = 0, height = 0, raf = 0, last = 0, visible = true, dirty = true;
   let accTable = null, rMaxScene = 10, rStart = 0;
@@ -139,7 +143,10 @@ export async function createRealController(section) {
       const period = 2 * Math.PI * rLast / vLast;          // outer orbit, kpc/(km/s)
       stepStars(dt * period / 8);                            // one outer orbit per 8 s
       dirty = true;
-      if ((now | 0) % 6 === 0) updateNote();
+      if (now - lastNoteAt >= 250) {
+        lastNoteAt = now;
+        updateNote();
+      }
     }
     if (dirty) draw();
     if (running() || dirty) request(); else last = 0;
@@ -149,9 +156,10 @@ export async function createRealController(section) {
     const rLast = g.R[g.R.length - 1];
     const radii = stars.map((s) => Math.hypot(s.x, s.z));
     const out = radii.filter((r) => r > rLast * 1.25).length / stars.length;
-    $('#real-note').textContent = `Median star radius ${median(radii).toFixed(1)} kpc (started at ${rStart.toFixed(1)}). `
+    const note = `Median star radius ${median(radii).toFixed(1)} kpc (started at ${rStart.toFixed(1)}). `
       + `${(100 * out).toFixed(0)}% of stars have drifted well beyond the last measured point.`
       + (field === 'baryons' ? ' Stars keep their measured speeds, but only the visible mass pulls on them.' : '');
+    if (noteText.data !== note) noteText.data = note;
   }
 
   canvas.addEventListener('pointerdown', (e) => { if (e.button !== 0) return; drag = { id: e.pointerId, x: e.clientX, y: e.clientY, yaw, tilt }; canvas.setPointerCapture(e.pointerId); });
@@ -169,7 +177,11 @@ export async function createRealController(section) {
   $('[data-cam=face]', section).addEventListener('click', (e) => { tilt = tilt > 1.4 ? 1.0 : Math.PI / 2; e.currentTarget.textContent = tilt > 1.4 ? 'Tilt the view' : 'Face-on'; dirty = true; request(); });
   $('[data-cam=in]', section).addEventListener('click', () => { zoom = Math.min(3, zoom * 1.18); dirty = true; request(); });
   $('[data-cam=out]', section).addEventListener('click', () => { zoom = Math.max(0.3, zoom / 1.18); dirty = true; request(); });
-  new ResizeObserver(() => { const b = canvas.getBoundingClientRect(); width = b.width; height = b.height; const r = Math.min(devicePixelRatio || 1, 2); canvas.width = Math.round(width * r); canvas.height = Math.round(height * r); ctx?.setTransform(r, 0, 0, r, 0, 0); dirty = true; request(); }).observe(canvas);
+  observeCanvasSize(canvas, ctx, (w, h) => {
+    width = w;
+    height = h;
+    draw();
+  });
   new IntersectionObserver(([en]) => { visible = en.isIntersecting; last = 0; if (visible) { dirty = true; request(); } }, { rootMargin: '80px' }).observe(canvas);
 
   // ---------- field + playback ----------
