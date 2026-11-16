@@ -1,6 +1,6 @@
 # Galaxy Sandbox
 
-Compare stellar orbits in two gravitational fields from the same initial conditions.
+Four experiments on what holds galaxies together: stars in a fixed field with and without a halo, a self-gravitating disk that forms a bar unless a halo stabilises it, colliding galaxies that merge only with dark-matter halos, and the 175 measured SPARC rotation curves with a halo-fitting challenge.
 
 From the repository root, run `python -m http.server 8000` and open [Galaxy Sandbox](http://localhost:8000/gravity/).
 
