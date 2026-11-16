@@ -1,3 +1,4 @@
+import { observeCanvasSize } from './canvas-size.js';
 /**
  * Renderer and worker driver for the self-gravitating modes.
  * One stage can show one or two panels side by side; each panel runs its own worker.
@@ -167,12 +168,11 @@ export function createNBodyStage({ canvas, frame = 'origin', viewRadius = 7, rat
     dirty = true; request();
   });
 
-  new ResizeObserver(() => {
-    const box = canvas.getBoundingClientRect(); width = box.width; height = box.height;
-    const r = Math.min(devicePixelRatio || 1, 2);
-    canvas.width = Math.round(width * r); canvas.height = Math.round(height * r);
-    ctx?.setTransform(r, 0, 0, r, 0, 0); dirty = true; request();
-  }).observe(canvas);
+  observeCanvasSize(canvas, ctx, (w, h) => {
+    width = w;
+    height = h;
+    draw();
+  });
   new IntersectionObserver(([en]) => { visible = en.isIntersecting; last = 0; if (visible) { dirty = true; request(); } }, { rootMargin: '80px' }).observe(canvas);
   document.addEventListener('visibilitychange', () => { last = 0; if (!document.hidden) { dirty = true; request(); } });
 

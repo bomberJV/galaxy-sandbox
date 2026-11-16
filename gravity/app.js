@@ -1,3 +1,4 @@
+import { observeCanvasSize } from './canvas-size.js';
 import {STEP,SCENARIOS,createSystem,comparisonFrom,makeProbe,cloneParticles,advanceSystem,sampleTrails,circularSpeed,medianRadius,makeRandom} from './physics.js';
 
 const $=selector=>document.querySelector(selector);
@@ -12,7 +13,7 @@ const launchDescriptions={
 };
 let scenario='halo',system=createSystem(SCENARIOS.halo),other=null,compare=false;
 let paused=motion.matches,speed=4,launchKind='circular',probeId=0,branchTime=0;
-let width=0,height=0,ratio=1,yaw=.22,tilt=.91,zoom=1,drag=null,visible=true;
+let width=0,height=0,yaw=.22,tilt=.91,zoom=1,drag=null,visible=true;
 let raf=0,last=0,accumulator=0,ticks=0,lastReadout=-Infinity,dirty=true;
 const random=makeRandom(3298);
 const background=Array.from({length:100},()=>[random(),random(),random()]);
@@ -79,9 +80,9 @@ function draw(){
   if(!ctx||!width||!height)return;
   panels().forEach(drawPanel);
   if(compare){ctx.strokeStyle='#78946377';ctx.lineWidth=1;ctx.beginPath();if(width<560){ctx.moveTo(0,height/2);ctx.lineTo(width,height/2);}else{ctx.moveTo(width/2,0);ctx.lineTo(width/2,height);}ctx.stroke();}
-  $('#telemetry').textContent=paused?'TIME HELD':`${system.stars.length} TRACERS${compare?' / EACH UNIVERSE':''} · ${speed}× TIME`;
   dirty=false;
 }
+let displayedProbe, displayedComparison;
 function updateReadouts(force=false){
   if(!force&&system.time-lastReadout<.6)return;lastReadout=system.time;
   $('#time-value').textContent=system.time.toFixed(1);
@@ -89,10 +90,23 @@ function updateReadouts(force=false){
   $('#radius-value').innerHTML=right===null?left.toFixed(2):`${left.toFixed(2)} <small>/ ${right.toFixed(2)}</small>`;
   $('#speed-value').innerHTML=`${circularSpeed(10,system.params).toFixed(3)}${other?` <small>/ ${circularSpeed(10,other.params).toFixed(3)}</small>`:''}`;
   const latest=system.probes.at(-1),alt=other?.probes.at(-1),box=$('#tracer-readout');
-  if(!latest){box.innerHTML='<span class="mono">NO TRACER YET</span><p>Launch one, or tap a point in the galaxy. Each colored line records a path.</p>';}
-  else{
-    const r=Math.hypot(latest.x,latest.y,latest.z),v=Math.hypot(latest.vx,latest.vy,latest.vz);
-    box.innerHTML=`<span class="mono" style="color:${latest.color}">TRACER ${String(latest.id).padStart(2,'0')} / ${latest.kind.toUpperCase()}</span><dl><dt>Radius</dt><dd>${r.toFixed(2)}</dd><dt>Speed</dt><dd>${v.toFixed(3)}</dd>${alt?`<dt>Alternate radius</dt><dd>${Math.hypot(alt.x,alt.y,alt.z).toFixed(2)}</dd>`:''}</dl><p>${system.probes.length} of 6 tracer slots in use. Trails retain the latest 42 simulation units.</p>`;
+  // Keep the live values and their narration controls mounted between simulation ticks.
+  if (latest !== displayedProbe || Boolean(alt) !== displayedComparison) {
+    displayedProbe = latest;
+    displayedComparison = Boolean(alt);
+    if (latest) {
+      const row = label => `<dt>${label}</dt><dd><span data-tracer-value></span></dd>`;
+      box.innerHTML = `<span class="mono" style="color:${latest.color}">TRACER ${String(latest.id).padStart(2,'0')} / ${latest.kind.toUpperCase()}</span><dl>${row('Radius')}${row('Speed')}${alt ? row('Alternate radius') : ''}</dl><p>${system.probes.length} of 6 tracer slots in use. Trails retain the latest 42 simulation units.</p>`;
+    } else {
+      box.innerHTML = '<span class="mono">NO TRACER YET</span><p>Launch one, or tap a point in the galaxy. Each colored line records a path.</p>';
+    }
+  }
+  if (latest) {
+    const values = [Math.hypot(latest.x,latest.y,latest.z).toFixed(2), Math.hypot(latest.vx,latest.vy,latest.vz).toFixed(3)];
+    if (alt) values.push(Math.hypot(alt.x,alt.y,alt.z).toFixed(2));
+    box.querySelectorAll('[data-tracer-value]').forEach((node,index) => {
+      if (node.textContent !== values[index]) node.textContent = values[index];
+    });
   }
   $('#clear-trails').disabled=!latest;
 }
@@ -108,6 +122,7 @@ function updateCurve(){
   $('#curve-description').textContent=system.params.halo?`At r = 10, the current model needs ${circularSpeed(10,system.params).toFixed(3)} speed units for a circular orbit. The central component alone needs ${circularSpeed(10,bare).toFixed(3)}.`:'With the halo off, the two curves coincide. A star that keeps its earlier, faster velocity will no longer be on a circular orbit.';
 }
 function sync(){
+  $('#telemetry').textContent=paused?'TIME HELD':`${system.stars.length} TRACERS${compare?' / EACH UNIVERSE':''} · ${speed}× TIME`;
   $('#pause').textContent=paused?'Play':'Pause';$('#pause').setAttribute('aria-pressed',paused);
   $('#compare').textContent=compare?'Back to one view':'Compare halo on / off';$('#compare').setAttribute('aria-pressed',compare);
   $('#halo-switch').textContent=system.params.halo?'Remove halo':'Add halo';$('#halo-switch').setAttribute('aria-pressed',system.params.halo>0);
@@ -116,7 +131,7 @@ function sync(){
   stage.classList.toggle('comparing',compare);
   $('#compare-note').textContent=compare?`Same positions and velocities at t = ${branchTime.toFixed(1)}; only the halo differs. Paired readouts show current / alternate. No forces pass between the two panels.`:'660 stars. One fixed gravitational field. The spiral is an initial arrangement, not a self-gravitating spiral galaxy.';
   document.querySelectorAll('[data-scenario]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.scenario===scenario));
-  document.querySelectorAll('[data-speed]').forEach(b=>b.setAttribute('aria-pressed',Number(b.dataset.speed)===speed));
+  document.querySelectorAll('#sandbox [data-speed]').forEach(b=>b.setAttribute('aria-pressed',Number(b.dataset.speed)===speed));
   document.querySelectorAll('[data-launch]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.launch===launchKind));
   $('#launch-copy').textContent=launchDescriptions[launchKind];
   dirty=true;updateReadouts(true);updateCurve();requestDraw();
@@ -151,7 +166,7 @@ function resetCamera(){yaw=.22;tilt=.91;zoom=1;$('#view').textContent='Face-on';
 function cameraChange(){dirty=true;$('#view').textContent=tilt>1.4?'Tilt the view':'Face-on';requestDraw();}
 
 for(const b of document.querySelectorAll('[data-scenario]'))b.onclick=()=>setScenario(b.dataset.scenario);
-for(const b of document.querySelectorAll('[data-speed]'))b.onclick=()=>{speed=Number(b.dataset.speed);last=0;sync();};
+for(const b of document.querySelectorAll('#sandbox [data-speed]'))b.onclick=()=>{speed=Number(b.dataset.speed);last=0;sync();};
 for(const b of document.querySelectorAll('[data-launch]'))b.onclick=()=>setLaunch(b.dataset.launch);
 $('#pause').onclick=()=>setPaused(!paused);
 $('#reset').onclick=()=>{setScenario(scenario);resetCamera();};
@@ -184,7 +199,12 @@ for(const b of document.querySelectorAll('[data-experiment]'))b.onclick=()=>{
   if(key==='core'){compare=false;setScenario('compact');setLaunch('plunge');launchAt(7,0);}
   speed=4;setPaused(false);stage.scrollIntoView({block:'center',behavior:motion.matches?'auto':'smooth'});
 };
-new ResizeObserver(()=>{const box=canvas.getBoundingClientRect();width=box.width;height=box.height;ratio=Math.min(devicePixelRatio||1,2);canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio);ctx?.setTransform(ratio,0,0,ratio,0,0);stage.classList.toggle('narrow',width<560);dirty=true;requestDraw();}).observe(canvas);
+observeCanvasSize(canvas, ctx, (w, h) => {
+  width = w;
+  height = h;
+  stage.classList.toggle('narrow', width < 560);
+  draw();
+});
 new IntersectionObserver(([entry])=>{visible=entry.isIntersecting;last=0;if(visible){dirty=true;requestDraw();}else if(raf){cancelAnimationFrame(raf);raf=0;}},{rootMargin:'100px'}).observe(canvas);
 document.addEventListener('visibilitychange',()=>{last=0;if(document.hidden){if(raf)cancelAnimationFrame(raf);raf=0;accumulator=0;}else{dirty=true;requestDraw();}});
 motion.addEventListener('change',e=>{if(e.matches)setPaused(true);});
