@@ -1,4 +1,6 @@
 import { observeCanvasSize } from './canvas-size.js';
+// Modified 2026-11-21: catalogue-validated deep links and an explicit reduced-chi-squared label.
+import { galaxyFromSearch } from './real-link.js';
 import { loadSparc, findGalaxy, vBaryonSq, PROFILES, modelV, chi2, fitHalo, accelerationAt, score, CHALLENGES } from './sparc.js';
 
 const $ = (s, root = document) => root.querySelector(s);
@@ -227,7 +229,7 @@ export async function createRealController(section) {
     const c = chi2(g, vm);
     const sc = score(c.chi2r);
     const starsHtml = '★'.repeat(sc.stars) + `<i>${'★'.repeat(3 - sc.stars)}</i>`;
-    $('#real-score').innerHTML = `<div><small>FIT TO THE DATA · χ² PER POINT</small><strong>${c.chi2r.toFixed(2)}</strong></div><div class="stars" aria-label="${sc.stars} of 3 stars">${starsHtml}</div>`;
+    $('#real-score').innerHTML = `<div><small>FIT TO THE DATA · REDUCED χ²</small><strong>${c.chi2r.toFixed(2)}</strong><small>χ² / max(n − 2, 1) · ${c.dof} degrees of freedom</small></div><div class="stars" aria-label="${sc.stars} of 3 stars">${starsHtml}</div>`;
     drawCurve(vm);
     if (field === 'model') { buildAccTable(); }
     if (challenge && chal.some((x) => x.name === g.name)) {
@@ -315,7 +317,7 @@ export async function createRealController(section) {
     renderProgress(); update();
   });
 
-  setGalaxy(chal[0]?.name || galaxies[0].name);
+  setGalaxy(galaxyFromSearch(data, location.search) || chal[0]?.name || galaxies[0].name);
   status.textContent = 'Press “Stars and gas only” to take the dark matter away.';
   syncButtons();
   return {
