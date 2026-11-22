@@ -2,7 +2,7 @@
 
 A visual, browser-local experiment in fixed gravitational fields. Rotate a three-dimensional star field, change its halo, launch orbit tracers, and compare two possible evolutions from exactly the same particle state.
 
-This is an educational simulation, not a cosmological solver or a rerun of the SPARC research. No measured galaxy data is loaded. No external libraries, network services, accounts, or API keys are required.
+This is an educational simulation, not a cosmological solver or a rerun of the SPARC research. The Halo lab uses synthetic tracers; Real galaxies loads the bundled SPARC observations described below. No external libraries, network services, accounts, or API keys are required.
 
 ## Run
 
@@ -83,7 +83,11 @@ Two disk galaxies with bulges and live (particle) dark-matter halos on a bound o
 
 ### Real galaxies
 
-All 175 SPARC galaxies (Lelli, McGaugh & Schombert 2016, AJ 152, 157), compiled by `tools/build_sparc.py` into `sparc-data.json`. Test-particle stars and gas start at the measured speeds; the field can be the one the measured curve implies, stars and gas only, or your own halo model. The fitting panel offers NFW, Burkert and pseudo-isothermal halos with a stellar mass-to-light slider (bulge M/L = 1.4 × disk). Fits use the dark-matter working paper's method (5 km/s error floor, log ρ and log r_s within [3, 11] × [−1.5, 2.5]) and reproduce all 200 of its NFW and Burkert χ² values. Challenge mode asks you to fit ten chosen galaxies to three stars (χ² per point ≤ 1.5) and keeps progress in browser storage.
+All 175 SPARC galaxies (Lelli, McGaugh & Schombert 2016, AJ 152, 157), compiled by `tools/build_sparc.py` into `sparc-data.json`. Test-particle stars and gas start at the measured speeds; the field can be the one the measured curve implies, stars and gas only, or your own halo model. The fitting panel offers NFW, Burkert and pseudo-isothermal halos with a stellar mass-to-light slider (bulge M/L = 1.4 × disk). Fits use the dark-matter working paper's method (5 km/s error floor, log ρ and log r_s within [3, 11] × [−1.5, 2.5]) and reproduce all 200 of its NFW and Burkert χ² values. Challenge mode asks you to fit ten chosen galaxies to three stars (reduced χ² ≤ 1.5) and keeps progress in browser storage. The displayed reduced χ² divides χ² by max(n − 2, 1), where n is the number of measured radii and two halo parameters are fitted; it is not χ² per data point.
+
+#### Links to an observed example
+
+Use `gravity/?galaxy=DDO154#real` to open Real galaxies with a selected catalogue entry. The query is resolved through the existing SPARC name lookup, so `?galaxy=NGC%202403#real` also selects `NGC2403`. Unknown, blank or malformed names retain the usual initial galaxy without interrupting the app. The URL never supplies measurements, fit parameters, HTML or a data-source URL. This selects the existing interactive app; its chosen halo and mass-to-light settings are not a frozen working-paper fit. The app includes 175 catalogue entries, while the paper's selected analysis contains 100 galaxies.
 
 ## Scope and limitations
 
